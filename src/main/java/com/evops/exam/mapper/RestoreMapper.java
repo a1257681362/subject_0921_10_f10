@@ -58,6 +58,12 @@ import com.evops.papersel.entity.PaperSelAlgorithm;
 import com.evops.papersel.entity.PaperSelAlgorithmVersion;
 import com.evops.papersel.entity.PaperSelRun;
 import com.evops.papersel.entity.PaperSelPaper;
+import com.evops.capacity.entity.CapacityRule;
+import com.evops.capacity.entity.CapacityRuleVersion;
+import com.evops.capacity.entity.CapacityState;
+import com.evops.capacity.entity.CapacityWaitlist;
+import com.evops.capacity.entity.CapacityWaitlistEvent;
+import com.evops.capacity.entity.CapacityNotification;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -903,6 +909,25 @@ public interface RestoreMapper {
             + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
     void insertAppealVersion(QualificationAppealVersion v);
 
+    // ---------- capacity-1：热门考点容量控制与候补递补 ----------
+    @Delete("DELETE FROM t_capacity_notification")
+    void clearCapacityNotifications();
+
+    @Delete("DELETE FROM t_capacity_waitlist_event")
+    void clearCapacityWaitlistEvents();
+
+    @Delete("DELETE FROM t_capacity_waitlist")
+    void clearCapacityWaitlist();
+
+    @Delete("DELETE FROM t_capacity_state")
+    void clearCapacityStates();
+
+    @Delete("DELETE FROM t_capacity_rule_version")
+    void clearCapacityVersions();
+
+    @Delete("DELETE FROM t_capacity_rule")
+    void clearCapacityRules();
+
     // ---------- papersel-1：教研组卷抽选 ----------
 
     @Delete("DELETE FROM t_paper_sel_paper")
@@ -970,6 +995,53 @@ public interface RestoreMapper {
             + "#{paperFingerprint},#{overlapMaxRate},#{overlapDetail},#{retries},#{executedAt},"
             + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
     void insertPaperSelPaper(PaperSelPaper p);
+
+    @Insert("INSERT INTO t_capacity_rule (id, code, name, site_id, batch_id, remark, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{code},#{name},#{siteId},#{batchId},#{remark},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertCapacityRule(CapacityRule r);
+
+    @Insert("INSERT INTO t_capacity_rule_version (id, rule_id, version_no, status, params, remark, "
+            + "published_by, published_at, disabled_by, disabled_at, operator, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{ruleId},#{versionNo},#{status},#{params},#{remark},"
+            + "#{publishedBy},#{publishedAt},#{disabledBy},#{disabledAt},#{operator},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertCapacityVersion(CapacityRuleVersion v);
+
+    @Insert("INSERT INTO t_capacity_state (id, rule_id, site_id, batch_id, current_version_id, "
+            + "current_version_no, version_generation, window_start, window_end, offer_timeout_minutes, "
+            + "capacity, occupied_count, waiting_count, seated_count, updated_by, updated_at, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{ruleId},#{siteId},#{batchId},#{currentVersionId},#{currentVersionNo},"
+            + "#{versionGeneration},#{windowStart},#{windowEnd},#{offerTimeoutMinutes},#{capacity},"
+            + "#{occupiedCount},#{waitingCount},#{seatedCount},#{updatedBy},#{updatedAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertCapacityState(CapacityState s);
+
+    @Insert("INSERT INTO t_capacity_waitlist (id, rule_id, site_id, batch_id, reg_no, name, phone, seq, status, "
+            + "offered_at, offer_deadline, offer_round, confirmed_at, registration_id, finished_at, finish_reason, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{ruleId},#{siteId},#{batchId},#{regNo},#{name},#{phone},#{seq},#{status},"
+            + "#{offeredAt},#{offerDeadline},#{offerRound},#{confirmedAt},#{registrationId},"
+            + "#{finishedAt},#{finishReason},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertCapacityWaitlist(CapacityWaitlist w);
+
+    @Insert("INSERT INTO t_capacity_waitlist_event (id, waitlist_id, rule_id, seq, change_type, status_from, "
+            + "status_to, detail, operator, event_at, create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{waitlistId},#{ruleId},#{seq},#{changeType},#{statusFrom},#{statusTo},#{detail},"
+            + "#{operator},#{eventAt},#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertCapacityWaitlistEvent(CapacityWaitlistEvent e);
+
+    @Insert("INSERT INTO t_capacity_notification (id, rule_id, waitlist_id, batch_id, reg_no, name, notify_type, "
+            + "title, content, offer_deadline, status, operator, notified_at, read_at, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{ruleId},#{waitlistId},#{batchId},#{regNo},#{name},#{notifyType},"
+            + "#{title},#{content},#{offerDeadline},#{status},#{operator},#{notifiedAt},#{readAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertCapacityNotification(CapacityNotification n);
 
     @Select("SELECT COALESCE(MAX(id),0) FROM t_paper_material")
     long maxPaperMaterialId();
@@ -1042,4 +1114,40 @@ public interface RestoreMapper {
 
     @Update("ALTER TABLE t_paper_sel_paper ALTER COLUMN id RESTART WITH ${value}")
     void restartPaperSelPaper(@Param("value") long value);
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_capacity_rule")
+    long maxCapacityRuleId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_capacity_rule_version")
+    long maxCapacityVersionId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_capacity_state")
+    long maxCapacityStateId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_capacity_waitlist")
+    long maxCapacityWaitlistId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_capacity_waitlist_event")
+    long maxCapacityWaitlistEventId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_capacity_notification")
+    long maxCapacityNotificationId();
+
+    @Update("ALTER TABLE t_capacity_rule ALTER COLUMN id RESTART WITH ${value}")
+    void restartCapacityRule(@Param("value") long value);
+
+    @Update("ALTER TABLE t_capacity_rule_version ALTER COLUMN id RESTART WITH ${value}")
+    void restartCapacityVersion(@Param("value") long value);
+
+    @Update("ALTER TABLE t_capacity_state ALTER COLUMN id RESTART WITH ${value}")
+    void restartCapacityState(@Param("value") long value);
+
+    @Update("ALTER TABLE t_capacity_waitlist ALTER COLUMN id RESTART WITH ${value}")
+    void restartCapacityWaitlist(@Param("value") long value);
+
+    @Update("ALTER TABLE t_capacity_waitlist_event ALTER COLUMN id RESTART WITH ${value}")
+    void restartCapacityWaitlistEvent(@Param("value") long value);
+
+    @Update("ALTER TABLE t_capacity_notification ALTER COLUMN id RESTART WITH ${value}")
+    void restartCapacityNotification(@Param("value") long value);
 }
