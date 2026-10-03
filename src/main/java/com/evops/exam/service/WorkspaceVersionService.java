@@ -114,6 +114,22 @@ import com.evops.papersel.mapper.PaperSelAlgorithmMapper;
 import com.evops.papersel.mapper.PaperSelAlgorithmVersionMapper;
 import com.evops.papersel.mapper.PaperSelRunMapper;
 import com.evops.papersel.mapper.PaperSelPaperMapper;
+import com.evops.capacity.entity.CapacityBatch;
+import com.evops.capacity.entity.CapacityEvent;
+import com.evops.capacity.entity.CapacityNotification;
+import com.evops.capacity.entity.CapacityOffer;
+import com.evops.capacity.entity.CapacityRule;
+import com.evops.capacity.entity.CapacityRuleVersion;
+import com.evops.capacity.entity.CapacitySeat;
+import com.evops.capacity.entity.CapacityWaitlistEntry;
+import com.evops.capacity.mapper.CapacityBatchMapper;
+import com.evops.capacity.mapper.CapacityEventMapper;
+import com.evops.capacity.mapper.CapacityNotificationMapper;
+import com.evops.capacity.mapper.CapacityOfferMapper;
+import com.evops.capacity.mapper.CapacityRuleMapper;
+import com.evops.capacity.mapper.CapacityRuleVersionMapper;
+import com.evops.capacity.mapper.CapacitySeatMapper;
+import com.evops.capacity.mapper.CapacityWaitlistEntryMapper;
 import com.evops.exam.mapper.AdmissionTicketMapper;
 import com.evops.exam.mapper.ExamBatchMapper;
 import com.evops.exam.mapper.ExamRoomMapper;
@@ -205,6 +221,14 @@ public class WorkspaceVersionService {
     private final PaperSelAlgorithmVersionMapper paperSelVersionMapper;
     private final PaperSelRunMapper paperSelRunMapper;
     private final PaperSelPaperMapper paperSelPaperMapper;
+    private final CapacityRuleMapper capacityRuleMapper;
+    private final CapacityRuleVersionMapper capacityRuleVersionMapper;
+    private final CapacityBatchMapper capacityBatchMapper;
+    private final CapacitySeatMapper capacitySeatMapper;
+    private final CapacityWaitlistEntryMapper capacityEntryMapper;
+    private final CapacityOfferMapper capacityOfferMapper;
+    private final CapacityNotificationMapper capacityNotificationMapper;
+    private final CapacityEventMapper capacityEventMapper;
     private final ObjectMapper objectMapper;
     private final RestoreMapper restoreMapper;
 
@@ -268,6 +292,14 @@ public class WorkspaceVersionService {
                                    PaperSelAlgorithmVersionMapper paperSelVersionMapper,
                                    PaperSelRunMapper paperSelRunMapper,
                                    PaperSelPaperMapper paperSelPaperMapper,
+                                   CapacityRuleMapper capacityRuleMapper,
+                                   CapacityRuleVersionMapper capacityRuleVersionMapper,
+                                   CapacityBatchMapper capacityBatchMapper,
+                                   CapacitySeatMapper capacitySeatMapper,
+                                   CapacityWaitlistEntryMapper capacityEntryMapper,
+                                   CapacityOfferMapper capacityOfferMapper,
+                                   CapacityNotificationMapper capacityNotificationMapper,
+                                   CapacityEventMapper capacityEventMapper,
                                    ObjectMapper objectMapper,
                                    RestoreMapper restoreMapper) {
         this.versionMapper = versionMapper;
@@ -330,6 +362,14 @@ public class WorkspaceVersionService {
         this.paperSelVersionMapper = paperSelVersionMapper;
         this.paperSelRunMapper = paperSelRunMapper;
         this.paperSelPaperMapper = paperSelPaperMapper;
+        this.capacityRuleMapper = capacityRuleMapper;
+        this.capacityRuleVersionMapper = capacityRuleVersionMapper;
+        this.capacityBatchMapper = capacityBatchMapper;
+        this.capacitySeatMapper = capacitySeatMapper;
+        this.capacityEntryMapper = capacityEntryMapper;
+        this.capacityOfferMapper = capacityOfferMapper;
+        this.capacityNotificationMapper = capacityNotificationMapper;
+        this.capacityEventMapper = capacityEventMapper;
         this.objectMapper = objectMapper;
         this.restoreMapper = restoreMapper;
     }
@@ -498,6 +538,14 @@ public class WorkspaceVersionService {
             data.put("paperSelVersions", paperSelVersionMapper.selectList(null));
             data.put("paperSelRuns", paperSelRunMapper.selectList(null));
             data.put("paperSelPapers", paperSelPaperMapper.selectList(null));
+            data.put("capacityRules", capacityRuleMapper.selectList(null));
+            data.put("capacityRuleVersions", capacityRuleVersionMapper.selectList(null));
+            data.put("capacityBatches", capacityBatchMapper.selectList(null));
+            data.put("capacitySeats", capacitySeatMapper.selectList(null));
+            data.put("capacityEntries", capacityEntryMapper.selectList(null));
+            data.put("capacityOffers", capacityOfferMapper.selectList(null));
+            data.put("capacityNotifications", capacityNotificationMapper.selectList(null));
+            data.put("capacityEvents", capacityEventMapper.selectList(null));
             return objectMapper.writeValueAsString(data);
         } catch (Exception e) {
             throw new BusinessException("SNAPSHOT_FAILED", "生成工作区快照失败：" + e.getMessage());
@@ -515,6 +563,14 @@ public class WorkspaceVersionService {
         // 先清空业务表（版本表本身不动），再按快照原样写回。
         // 用显式带主键的原生 INSERT：准考证、成绩等表的外键依赖原始 id，
         // H2 的 GENERATED BY DEFAULT 允许指定 id 插入。
+        restoreMapper.clearCapacityEvents();
+        restoreMapper.clearCapacityNotifications();
+        restoreMapper.clearCapacityOffers();
+        restoreMapper.clearCapacityEntries();
+        restoreMapper.clearCapacitySeats();
+        restoreMapper.clearCapacityBatches();
+        restoreMapper.clearCapacityRuleVersions();
+        restoreMapper.clearCapacityRules();
         restoreMapper.clearCertRevokeRecords();
         restoreMapper.clearCertificates();
         restoreMapper.clearCertSeqs();
@@ -688,6 +744,30 @@ public class WorkspaceVersionService {
         for (PaperSelPaper p : nullSafe(data.paperSelPapers)) {
             restoreMapper.insertPaperSelPaper(p);
         }
+        for (CapacityRule r : nullSafe(data.capacityRules)) {
+            restoreMapper.insertCapacityRule(r);
+        }
+        for (CapacityRuleVersion v : nullSafe(data.capacityRuleVersions)) {
+            restoreMapper.insertCapacityRuleVersion(v);
+        }
+        for (CapacityBatch b : nullSafe(data.capacityBatches)) {
+            restoreMapper.insertCapacityBatch(b);
+        }
+        for (CapacitySeat s : nullSafe(data.capacitySeats)) {
+            restoreMapper.insertCapacitySeat(s);
+        }
+        for (CapacityWaitlistEntry e : nullSafe(data.capacityEntries)) {
+            restoreMapper.insertCapacityEntry(e);
+        }
+        for (CapacityOffer o : nullSafe(data.capacityOffers)) {
+            restoreMapper.insertCapacityOffer(o);
+        }
+        for (CapacityNotification n : nullSafe(data.capacityNotifications)) {
+            restoreMapper.insertCapacityNotification(n);
+        }
+        for (CapacityEvent e : nullSafe(data.capacityEvents)) {
+            restoreMapper.insertCapacityEvent(e);
+        }
         for (MixAlgorithm a : nullSafe(data.mixAlgorithms)) {
             restoreMapper.insertMixAlgorithm(a);
         }
@@ -788,6 +868,14 @@ public class WorkspaceVersionService {
         restoreMapper.restartPaperSelVersion(restoreMapper.maxPaperSelVersionId() + 1);
         restoreMapper.restartPaperSelRun(restoreMapper.maxPaperSelRunId() + 1);
         restoreMapper.restartPaperSelPaper(restoreMapper.maxPaperSelPaperId() + 1);
+        restoreMapper.restartCapacityRule(restoreMapper.maxCapacityRuleId() + 1);
+        restoreMapper.restartCapacityRuleVersion(restoreMapper.maxCapacityRuleVersionId() + 1);
+        restoreMapper.restartCapacityBatch(restoreMapper.maxCapacityBatchId() + 1);
+        restoreMapper.restartCapacitySeat(restoreMapper.maxCapacitySeatId() + 1);
+        restoreMapper.restartCapacityEntry(restoreMapper.maxCapacityEntryId() + 1);
+        restoreMapper.restartCapacityOffer(restoreMapper.maxCapacityOfferId() + 1);
+        restoreMapper.restartCapacityNotification(restoreMapper.maxCapacityNotificationId() + 1);
+        restoreMapper.restartCapacityEvent(restoreMapper.maxCapacityEventId() + 1);
         restoreMapper.restartMixAlgorithm(restoreMapper.maxMixAlgorithmId() + 1);
         restoreMapper.restartMixVersion(restoreMapper.maxMixVersionId() + 1);
         restoreMapper.restartArrangementRun(restoreMapper.maxArrangementRunId() + 1);
@@ -930,5 +1018,13 @@ public class WorkspaceVersionService {
         public List<PaperSelAlgorithmVersion> paperSelVersions;
         public List<PaperSelRun> paperSelRuns;
         public List<PaperSelPaper> paperSelPapers;
+        public List<CapacityRule> capacityRules;
+        public List<CapacityRuleVersion> capacityRuleVersions;
+        public List<CapacityBatch> capacityBatches;
+        public List<CapacitySeat> capacitySeats;
+        public List<CapacityWaitlistEntry> capacityEntries;
+        public List<CapacityOffer> capacityOffers;
+        public List<CapacityNotification> capacityNotifications;
+        public List<CapacityEvent> capacityEvents;
     }
 }

@@ -410,3 +410,51 @@
 - 运行记录与卷面只追加，无修改/删除接口；种子与指纹均在 evops-base 落库可追溯，满足下周教研会过流程与事后验公平。
 
 > 新表 `t_paper_material / t_paper_material_change / t_paper_sel_algorithm / t_paper_sel_algorithm_version / t_paper_sel_run / t_paper_sel_paper` 已纳入工作区快照与回退；schema 版本号 `papersel-1`。
+
+## 旺季满员候补与递补工作区（capwait-1）
+
+解决上次热门考点"一分钟满员、四十多人直接流失、退位名额没人接"：**窗口与时限按考点配成容量规则（模块/版本/状态）→ 满员进候补队列、队位透明 → 有人退位按序递补、通知带时限 → 超时不确认顺给下一位、不漏发 → 递补确认即锁定座位**。所有钟点判定只用**服务器时间**，重复请求**不许插队**。容量控制分**容量控制模块（规则主表）/ 容量控制版本（只追加）/ 容量控制状态（批次当前状态）**三段，与等级规则、混编算法同一套版本模式。
+
+口径约定（也是前台答复口径）：
+- **满员才收候补**：仍有空位时候补接口拒收（`SEAT_AVAILABLE`），提示直接报名占座；退位释放的空位全部预留给候补递补，不再走直接报名。
+- **队位透明**：入队即发一批次内只增不复用的序号；查位置返回序号、前面人数、在飞递补截止钟点与服务器当前时间，不靠客户端猜。
+- **重复请求不插队**：同一人在队/在飞的重复候补请求原样返回原队位（幂等）；已超时出局/已入座等终态不能重新排队（`WAITLIST_TERMINAL`）。
+- **服务器时间判超时**：递补通知带 `expireAt` 截止钟点，确认与定时兜底都按服务器时间比较，客户端改时间无效；确认入口先结清超时再处理，防踩点抢座。
+- **顺延不漏发**：一个空位每轮递补一张单（`round_no` 递增），任一在飞单都能在状态里查到；超时即出局并由系统自动发给下一位，直到空位被确认或候补窗口关闭。
+- **规则只管新批次**：批次启用容量控制时冻结当时生效规则版本号与配置快照；之后规则发布新版不影响该批次在飞候补/递补。
+
+### 45. 容量控制模块（模块 + 版本 + 状态）
+
+- `POST /api/capacity-rules`、`GET /api/capacity-rules?siteId=`、`GET /api/capacity-rules/{id}`：规则按**考点**建档（一个考点仅一套，重复报 `DUPLICATE_CAPACITY_RULE`）。
+- `POST /api/capacity-rules/{ruleId}/versions`：建草稿版本，配置为
+  `{"waitlistEnabled":true,"offerTimeoutMinutes":30,"waitlistEndHoursBeforeExam":24}`
+  （确认时限 1~1440 分钟；提前关窗小时数非负，非法整批拒收）；`GET .../versions`、`GET /api/capacity-rules/versions/{versionId}`。
+- `POST /api/capacity-rules/versions/{versionId}/publish`：**DRAFT→ACTIVE**，发布即冻结配置，旧生效版自动 **DISABLED**；`POST .../disable` 人工停用（停用版不可重新发布，要改新建版本）。
+
+### 46. 批次容量控制状态（启用冻结版本；窗口跟考点配置走）
+
+- `POST /api/capacity/enable`：`{batchId,totalCapacity?,windowStartAt?,windowEndAt?,syncRegistrations?}`。
+  - 取批次所属考点容量规则的**当前 ACTIVE 版本**冻结到批次（无规则/无生效版分别报 `CAPACITY_RULE_NOT_CONFIGURED / CAPACITY_RULE_NOT_ACTIVE`）；
+  - 容量缺省取考点全部启用考场容量之和；窗口终点缺省按「开考日期+开考时间−提前小时数」推导，推导不出则不自动关闭（只认人工关闭）；显式窗口终点必须晚于起点；
+  - `syncRegistrations=true` 可把现有报名名册整批同步为直接占座（名册超容量 `CAPACITY_OVER_SUBSCRIBED`，不落半条）；重复启用拒收。
+- `POST /api/capacity/window/close?batchId=&reason=`：人工关窗；排队中候补统一置 `CLOSED` 并通知，在飞递补仍按各自时限处理，关后**不再发起新一轮递补**。
+- `GET /api/capacity/status?batchId=&includeHistory=`：容量/直接占座/候补锁座/空位/在飞递补/各状态候补计数、窗口状态 `NOT_ENABLED / NOT_OPENED / OPEN / CLOSED`、**服务器当前时间**与按队位排序的队列明细。
+
+### 47. 满员候补（进队列、位置透明、重复不插队）
+
+- `POST /api/capacity/seats/hold`、`POST /api/capacity/seats/release`：直接报名占座与退位；退位即把座位置 `RELEASED` 并**立即按序发起递补**。
+- `POST /api/capacity/waitlist/join`：`{batchId,regNo,phone?}`——满员才入队，返回队位视图（序号、前面人数、服务器时间）；已有在队/在飞条目不重复入队、返回原队位；终态拒绝重新排队；已锁座拒收。
+- `POST /api/capacity/waitlist/cancel`：主动退出（在飞退出视同放弃，其递补单结束并顺延）。
+- `GET /api/capacity/waitlist/position?batchId=&regNo=`：随时查本人队位与在飞递补截止钟点，位置全透明。
+
+### 48. 退位递补（通知带时限、超时顺延、确认锁座）
+
+- 退位触发或定时兜底扫描时，系统为每个「无在飞递补的空位」取队首（最小序号 `WAITING`）建递补单：
+  `POST /api/capacity/offers/confirm` `{batchId,regNo}` 在 `expireAt`（服务器时间）前确认——
+  座位**过记到候补人名下并锁定**（座位来源 `WAITLIST`、`HELD`，条目 `SEATED`），并发"递补成功已锁座"通知；
+- **超时未确认**：递补单 `EXPIRED`、本人候补条目 `EXPIRED` 出局并通知，座位自动**顺给下一位**（同空位 `round_no+1`，重新发通知）；队列前方的人出局不影响后来者顺序。
+- `POST /api/capacity/scan?batchId=`：手动立即执行兜底；平时定时任务**每分钟**按服务器时间扫描（`evops.capacity.scan-cron` 可调）：超时出局顺延、窗口到点自动关闭、空窗空位补发递补。
+- `GET /api/capacity/offers?batchId=`：逐轮递补单（核对每轮通知有无漏发）；`GET /api/capacity/events?batchId=`：入队/退位/递补/确认/超时/顺延/关窗事件流水（只追加）。
+- 通知：`GET /api/capacity/notifications?regNo=&unreadOnly=`、`POST /api/capacity/notifications/{id}/read`（本版站内落库，短信等外发渠道下版再接）。
+
+> 新表 `t_capacity_rule / t_capacity_rule_version / t_capacity_batch / t_capacity_seat / t_capacity_waitlist_entry / t_capacity_offer / t_capacity_notification / t_capacity_event` 已纳入工作区快照与回退；schema 版本号 `capwait-1`。

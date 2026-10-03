@@ -58,6 +58,14 @@ import com.evops.papersel.entity.PaperSelAlgorithm;
 import com.evops.papersel.entity.PaperSelAlgorithmVersion;
 import com.evops.papersel.entity.PaperSelRun;
 import com.evops.papersel.entity.PaperSelPaper;
+import com.evops.capacity.entity.CapacityBatch;
+import com.evops.capacity.entity.CapacityEvent;
+import com.evops.capacity.entity.CapacityNotification;
+import com.evops.capacity.entity.CapacityOffer;
+import com.evops.capacity.entity.CapacityRule;
+import com.evops.capacity.entity.CapacityRuleVersion;
+import com.evops.capacity.entity.CapacitySeat;
+import com.evops.capacity.entity.CapacityWaitlistEntry;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -1042,4 +1050,140 @@ public interface RestoreMapper {
 
     @Update("ALTER TABLE t_paper_sel_paper ALTER COLUMN id RESTART WITH ${value}")
     void restartPaperSelPaper(@Param("value") long value);
+
+    // ============ capwait-1：旺季满员候补与递补 ============
+    @Delete("DELETE FROM t_capacity_event")
+    void clearCapacityEvents();
+
+    @Delete("DELETE FROM t_capacity_notification")
+    void clearCapacityNotifications();
+
+    @Delete("DELETE FROM t_capacity_offer")
+    void clearCapacityOffers();
+
+    @Delete("DELETE FROM t_capacity_waitlist_entry")
+    void clearCapacityEntries();
+
+    @Delete("DELETE FROM t_capacity_seat")
+    void clearCapacitySeats();
+
+    @Delete("DELETE FROM t_capacity_batch")
+    void clearCapacityBatches();
+
+    @Delete("DELETE FROM t_capacity_rule_version")
+    void clearCapacityRuleVersions();
+
+    @Delete("DELETE FROM t_capacity_rule")
+    void clearCapacityRules();
+
+    @Insert("INSERT INTO t_capacity_rule (id, code, name, site_id, remark, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{code},#{name},#{siteId},#{remark},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertCapacityRule(CapacityRule r);
+
+    @Insert("INSERT INTO t_capacity_rule_version (id, rule_id, version_no, status, config, remark, "
+            + "published_by, published_at, disabled_by, disabled_at, operator, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{ruleId},#{versionNo},#{status},#{config},#{remark},"
+            + "#{publishedBy},#{publishedAt},#{disabledBy},#{disabledAt},#{operator},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertCapacityRuleVersion(CapacityRuleVersion v);
+
+    @Insert("INSERT INTO t_capacity_batch (id, batch_id, site_id, rule_id, rule_version_id, rule_version_no, "
+            + "config_snapshot, total_capacity, next_seq, window_start_at, window_end_at, status, enabled_at, "
+            + "closed_at, close_reason, operator, create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{batchId},#{siteId},#{ruleId},#{ruleVersionId},#{ruleVersionNo},"
+            + "#{configSnapshot},#{totalCapacity},#{nextSeq},#{windowStartAt},#{windowEndAt},#{status},"
+            + "#{enabledAt},#{closedAt},#{closeReason},#{operator},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertCapacityBatch(CapacityBatch b);
+
+    @Insert("INSERT INTO t_capacity_seat (id, batch_id, reg_no, name, source, entry_id, offer_id, status, "
+            + "held_at, confirmed_at, released_at, release_reason, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{batchId},#{regNo},#{name},#{source},#{entryId},#{offerId},#{status},"
+            + "#{heldAt},#{confirmedAt},#{releasedAt},#{releaseReason},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertCapacitySeat(CapacitySeat s);
+
+    @Insert("INSERT INTO t_capacity_waitlist_entry (id, batch_id, reg_no, name, phone, seq, status, offer_id, "
+            + "offered_at, offer_expires_at, offer_count, seat_id, seated_at, cancel_reason, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{batchId},#{regNo},#{name},#{phone},#{seq},#{status},#{offerId},"
+            + "#{offeredAt},#{offerExpiresAt},#{offerCount},#{seatId},#{seatedAt},#{cancelReason},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertCapacityEntry(CapacityWaitlistEntry e);
+
+    @Insert("INSERT INTO t_capacity_offer (id, batch_id, seat_id, round_no, entry_id, reg_no, name, status, "
+            + "offered_at, expire_at, notified_at, notification_id, confirmed_at, operator, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{batchId},#{seatId},#{roundNo},#{entryId},#{regNo},#{name},#{status},"
+            + "#{offeredAt},#{expireAt},#{notifiedAt},#{notificationId},#{confirmedAt},#{operator},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertCapacityOffer(CapacityOffer o);
+
+    @Insert("INSERT INTO t_capacity_notification (id, batch_id, reg_no, name, notify_type, title, content, "
+            + "status, offer_id, entry_id, operator, notified_at, read_at, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{batchId},#{regNo},#{name},#{notifyType},#{title},#{content},"
+            + "#{status},#{offerId},#{entryId},#{operator},#{notifiedAt},#{readAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertCapacityNotification(CapacityNotification n);
+
+    @Insert("INSERT INTO t_capacity_event (id, batch_id, entry_id, offer_id, seat_id, reg_no, event_type, "
+            + "from_status, to_status, detail, operator, event_at, "
+            + "create_by, create_time, update_by, update_time) VALUES "
+            + "(#{id},#{batchId},#{entryId},#{offerId},#{seatId},#{regNo},#{eventType},"
+            + "#{fromStatus},#{toStatus},#{detail},#{operator},#{eventAt},"
+            + "#{createBy},#{createTime},#{updateBy},#{updateTime})")
+    void insertCapacityEvent(CapacityEvent e);
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_capacity_rule")
+    long maxCapacityRuleId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_capacity_rule_version")
+    long maxCapacityRuleVersionId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_capacity_batch")
+    long maxCapacityBatchId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_capacity_seat")
+    long maxCapacitySeatId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_capacity_waitlist_entry")
+    long maxCapacityEntryId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_capacity_offer")
+    long maxCapacityOfferId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_capacity_notification")
+    long maxCapacityNotificationId();
+
+    @Select("SELECT COALESCE(MAX(id),0) FROM t_capacity_event")
+    long maxCapacityEventId();
+
+    @Update("ALTER TABLE t_capacity_rule ALTER COLUMN id RESTART WITH ${value}")
+    void restartCapacityRule(@Param("value") long value);
+
+    @Update("ALTER TABLE t_capacity_rule_version ALTER COLUMN id RESTART WITH ${value}")
+    void restartCapacityRuleVersion(@Param("value") long value);
+
+    @Update("ALTER TABLE t_capacity_batch ALTER COLUMN id RESTART WITH ${value}")
+    void restartCapacityBatch(@Param("value") long value);
+
+    @Update("ALTER TABLE t_capacity_seat ALTER COLUMN id RESTART WITH ${value}")
+    void restartCapacitySeat(@Param("value") long value);
+
+    @Update("ALTER TABLE t_capacity_waitlist_entry ALTER COLUMN id RESTART WITH ${value}")
+    void restartCapacityEntry(@Param("value") long value);
+
+    @Update("ALTER TABLE t_capacity_offer ALTER COLUMN id RESTART WITH ${value}")
+    void restartCapacityOffer(@Param("value") long value);
+
+    @Update("ALTER TABLE t_capacity_notification ALTER COLUMN id RESTART WITH ${value}")
+    void restartCapacityNotification(@Param("value") long value);
+
+    @Update("ALTER TABLE t_capacity_event ALTER COLUMN id RESTART WITH ${value}")
+    void restartCapacityEvent(@Param("value") long value);
 }
